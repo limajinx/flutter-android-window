@@ -16,66 +16,66 @@ import io.flutter.embedding.engine.dart.DartExecutor
 const val engineId = "flutter-android-window"
 
 class WindowService : android.app.Service() {
-    private lateinit var engine: FlutterEngine
-    private lateinit var androidWindow: AndroidWindow
-    private var running = false
-    private val channelId = "foreground"
+  private lateinit var engine: FlutterEngine
+  private lateinit var androidWindow: AndroidWindow
+  private var running = false
+  private val channelId = "foreground"
 
-    override fun onBind(intent: Intent): IBinder? {
-        return null
+  override fun onBind(intent: Intent): IBinder? {
+    return null
+  }
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    androidWindow.updateLayout()
+  }
+
+  override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    if(intent == null) return super.onStartCommand(null, flags, startId)
+    
+    if (!running) {
+      engine = FlutterEngine(application)
+      FlutterEngineCache.getInstance().put(engineId, engine)
+      val entry = intent.getStringExtra("entry") ?: "androidWindow"
+      val bundlePath = FlutterInjector.instance().flutterLoader().findAppBundlePath()
+      val entryPoint = DartExecutor.DartEntrypoint(bundlePath, entry)
+      engine.dartExecutor.executeDartEntrypoint(entryPoint)
+
+      val focusable = intent.getBooleanExtra("focusable", false)
+      val width = intent.getIntExtra("width", 400)
+      val height = intent.getIntExtra("height", 600)
+      val x = intent.getIntExtra("x", 0)
+      val y = intent.getIntExtra("y", 0)
+      androidWindow = AndroidWindow(this, focusable, width, height, x, y, engine)
+      androidWindow.open()
+      val notification = getNotification()
+      if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
+        startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+      } else {
+        startForeground(1, notification)
+      }
+      running = true
     }
+    return super.onStartCommand(intent, flags, startId)
+  }
 
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        androidWindow.updateLayout()
+  private fun getNotification(): Notification {
+    return if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
+      val channel = NotificationChannel(channelId, "Window Service", NotificationManager.IMPORTANCE_DEFAULT)
+      val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+      notificationManager.createNotificationChannel(channel)
+      Notification.Builder(this, channel.id)
+    } else {
+      @Suppress("Deprecation") Notification.Builder(this)
+    }.build()
+  }
+
+  override fun onDestroy() {
+    androidWindow.close()
+    try {
+      engine.destroy()
+      FlutterEngineCache.getInstance().remove(engineId)
+    } catch (_: Exception) {
     }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent == null) return super.onStartCommand(null, flags, startId)
-
-        if (!running) {
-            engine = FlutterEngine(application)
-            FlutterEngineCache.getInstance().put(engineId, engine)
-            val entry = intent.getStringExtra("entry") ?: "androidWindow"
-            val bundlePath = FlutterInjector.instance().flutterLoader().findAppBundlePath()
-            val entryPoint = DartExecutor.DartEntrypoint(bundlePath, entry)
-            engine.dartExecutor.executeDartEntrypoint(entryPoint)
-
-            val focusable = intent.getBooleanExtra("focusable", false)
-            val width = intent.getIntExtra("width", 400)
-            val height = intent.getIntExtra("height", 600)
-            val x = intent.getIntExtra("x", 0)
-            val y = intent.getIntExtra("y", 0)
-            androidWindow = AndroidWindow(this, focusable, width, height, x, y, engine)
-            androidWindow.open()
-            val notification = getNotification()
-            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
-                startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-            } else {
-                startForeground(1, notification)
-            }
-            running = true
-        }
-        return super.onStartCommand(intent, flags, startId)
-    }
-
-    private fun getNotification(): Notification {
-        return if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "Window Service", NotificationManager.IMPORTANCE_DEFAULT)
-            val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
-            Notification.Builder(this, channel.id)
-        } else {
-            @Suppress("Deprecation") Notification.Builder(this)
-        }.build()
-    }
-
-    override fun onDestroy() {
-        androidWindow.close()
-        try {
-            engine.destroy()
-            FlutterEngineCache.getInstance().remove(engineId)
-        } catch (_: Exception) {
-        }
-    }
+  }
 }
