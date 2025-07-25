@@ -23,7 +23,9 @@ apply plugin: 'kotlin-android'
 
 android {
     compileSdkVersion 33
-
+    
+    namespace = "com.qiuxiang.android_window"
+    
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
